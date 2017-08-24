@@ -1,0 +1,246 @@
+describe opc.Equipos;
+
+-- Creación de las tablas:
+CREATE TABLE EQUIPOS(
+  codE char(3) constraint codE_equipos_pk primary key,
+  nombreE varchar2(30) constraint nombreE_equipos_not_null not null constraint nombreE_equipos_unique unique,
+  localidad varchar2(30) constraint localidad_equipos_not_null not null,
+  entrenador varchar2(30) constraint entrenador_equipos_not_null not null,
+  fecha_crea date constraint fecha_crea_equipos_not_null not null);
+  
+describe equipos;
+
+describe opc.jugadores;
+
+create table jugadores(
+  codJ char(3) constraint codJ_jugadores_primary_key primary key,
+  codE char(3) constraint codE_jugadores_not_null not null,
+  nombreJ varchar(2) constraint nombreJ_jugadores_not_null not null);
+  
+describe opc.encuentros;
+  
+create table encuentros(
+  eq1 char(3),
+  eq2 char(3),
+  fecha date,
+  res1 number default 0 constraint res1_mayor_0_encuentros check(res1>=0),
+  res2 number default 0 constraint res2_mayor_0_encuentros check(res2>=0),
+  constraint eq1_eq2_encuentros_primary_key primary key(eq1,eq2));
+  
+describe encuentros;
+  
+create table faltas(
+  codJ char(3) constraint codJ_faltas_foreign_key references jugadores(codJ),
+  eq1 char(3),
+  eq2 char(3),
+  numero number default 0 constraint numero_faltas_between_0_5 check(numero>=0 and numero<=5),
+  constraint faltas_primary_key primary key(codJ, eq1, eq2),
+  constraint eqs_faltas_foreign_key foreign key(eq1,eq2) references encuentros(eq1,eq2));
+  
+describe faltas;
+  
+  
+-- Inserción de tuplas
+insert into equipos select * from opc.equipos;
+select * from equipos;
+
+insert into jugadores select * from opc.jugadores;
+
+describe jugadores;
+describe opc.jugadores;
+
+--alter table jugadores add(nombreJ char(30) not null);
+
+insert into encuentros select * from opc.encuentros;
+
+insert into faltas select * from opc.faltas;
+
+update encuentros set fecha=fecha+365;
+
+select * from encuentros;
+
+commit;
+
+delete from encuentros
+  where eq1 = '323' and eq2 = '444';
+  
+select * from faltas;
+  
+-- Ejemplos:
+
+-- 3.31
+select * from encuentros;
+
+-- 3.32
+select * from jugadores
+  order by nombreJ,codE;
+  
+--3.33
+select *
+  from jugadores j
+    where  codJ not in (select codJ from faltas);
+    
+-- 3.34
+select * 
+  from jugadores
+    where codE = (select codE
+                    from jugadores
+                      where codj = 'B4')
+      and codJ <> 'B4';
+      
+-- 3.35
+select nombreJ, localidad
+  from jugadores j,equipos eq
+    where j.codE = eq.codE;
+    
+--3.36
+select e1.nombreE, e2.nombreE
+  from equipos e1, equipos e2
+    where e1.codE<>e2.codE;
+    
+-- 3.37
+select distinct(nombreE)
+  from encuentros en, equipos eq
+    where eq.codE = en.eq1 and res1>res2;
+    
+select * from equipos;
+    
+-- 3.38
+select nombreE
+  from equipos
+    where codE IN (select eq1
+                    from encuentros
+                      where res1>res2)
+      OR
+          codE IN (select eq2
+                    from encuentros
+                      where res2>res1);
+    
+-- 3.39
+select nombreE
+  from equipos eq
+    where NOT EXISTS ((select distinct(eq1)
+                        from encuentros
+                          where res1>res2)
+                minus
+                      (select codE
+                        from equipos eq2
+                          where eq.codE=eq2.codE));
+                          
+select eq1,count(eq1) as ganados from encuentros eq1 where res1>res2 group by eq1
+      having count(eq1)=(select count(eq1) from encuentros enc group by eq1 having enc.eq1=eq1.eq1) ;
+      
+      
+select nombreE, partidos_ganados
+  from equipos eq
+    right join
+  (select eq1, count(*) as partidos_ganados
+  from encuentros
+    where res1 > res2
+    group by eq1) ganados
+      on eq.codE = ganados.eq1
+        where partidos_ganados = (select count(*)
+                                    from encuentros
+                                      group by eq1
+                                        having eq.codE = eq1);
+      
+
+      
+select * from encuentros;
+
+--3.40
+select eq1.nombreE, eq2.nombreE
+  from equipos eq1, equipos eq2
+    where eq1.codE <> eq2.codE and not exists (select *
+                                                from encuentros
+                                                  where eq1.codE = eq1 and
+                                                    eq2.codE = eq2);
+                                                    
+-- 3.41
+select eq1.nombreE, eq2.nombreE, eq1.localidad
+  from equipos eq1, equipos eq2
+    where eq1.codE <> eq2.codE and eq1.localidad = eq2.localidad
+      and exists (select *
+                  from encuentros en
+                    where eq1.codE = en.eq1 and eq2.codE = en.eq2);
+    
+select * from equipos;
+select * from encuentros;
+
+insert into encuentros(eq1, eq2) values ('REG', 'FCB');
+delete from encuentros where eq1 = 'REG' and eq2 = 'FCB';
+
+-- 3.42
+select eq1, count(eq1)
+  from encuentros
+    group by eq1;
+    
+--3.43
+select *
+  from encuentros
+    where abs(res1-res2) = (select max(abs(res1-res2))
+                              from encuentros);
+                              
+-- 3.44 -> no hay jugadores con mas de 10 faltas
+select * 
+  from jugadores j
+    where not exists(select fa.codJ
+                      from faltas fa
+                        group by fa.codJ
+                          having max(numero) > 2
+                            and fa.codJ = j.codJ);
+    
+select * from faltas;
+    
+select * from jugadores;
+
+--3.45
+select eq2, max(res2)
+  from encuentros
+    group by eq2
+      having max(res2) = (select max(res2)
+                            from encuentros);
+                            
+select * from encuentros;
+
+--3.47
+select equipo, count(*) ganados
+  from (select eq1 as equipo
+          from encuentros e1
+            where res1>res2
+        UNION ALL
+        select eq2 as equipo
+          from encuentros e2
+            where res2>res1) ganadores
+    group by equipo
+      having count(*) = (select max(count(*))
+                          from (select eq1 as equipo
+                                  from encuentros e1
+                                    where res1>res2
+                                  UNION ALL
+                                select eq2 as equipo
+                                  from encuentros e2
+                                    where res2>res1)
+                                  group by equipo);
+                                  
+-- 3.48
+select eq1, avg(res1)
+  from encuentros
+    group by eq1;
+
+-- 3.49
+select equipo, sum(puntos)
+  from (select eq1 as equipo, res1 as puntos
+          from encuentros
+            UNION ALL
+        select eq2 as equipo, res2 as puntos
+          from encuentros)
+    group by equipo
+      having sum(puntos) = (select max(puntos)
+                            from (select equipo, sum(puntos) as puntos
+                              from (select eq1 as equipo, res1 as puntos
+                                      from encuentros
+                                        UNION ALL
+                                    select eq2 as equipo, res2 as puntos
+                                      from encuentros)
+                                group by equipo));
